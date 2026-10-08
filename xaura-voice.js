@@ -43,7 +43,7 @@
   function newRec(){
     var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     var r=new SR();
-    r.lang=LANG_CODE; r.interimResults=false; r.maxAlternatives=1; r.continuous=false;
+    r.lang=LANG_CODE; r.interimResults=false; r.maxAlternatives=1; r.continuous=true;
     return r;
   }
 
@@ -131,7 +131,13 @@
       openWidget();
       recognition=newRec();
       recognition.onstart=function(){voiceActive=true;btn.classList.add('listening');btn.setAttribute('aria-label',T.stop);document.getElementById('xaura-voice-label').textContent=T.listening;};
-      recognition.onresult=function(e){sendToChat(e.results[0][0].transcript);};
+      recognition.onresult=function(e){
+        var txt='';
+        for(var i=e.resultIndex;i<e.results.length;i++){
+          if(e.results[i].isFinal) txt+=e.results[i][0].transcript;
+        }
+        if(txt){sendToChat(txt);recognition.stop();}
+      };
       recognition.onend=function(){voiceActive=false;btn.classList.remove('listening');btn.setAttribute('aria-label',T.mic);document.getElementById('xaura-voice-label').textContent=T.mic;};
       recognition.onerror=function(e){
         voiceActive=false;btn.classList.remove('listening');
