@@ -1,5 +1,5 @@
 /**
- * xaura-voice.js v2.0 - XAURA AI OS Voice Layer
+ * xaura-voice.js v2.1 - XAURA AI OS Voice Layer
  * ================================================
  * ONE floating mic button. Opens CRM chat + injects STT text via shadow DOM.
  * No duplicates, no cross-origin issues.
@@ -40,6 +40,7 @@
   var recognition = null;
   var voiceActive = false;
   var lastBotText = '';
+  var awaitTs = 0;
 
   // ââ Text-to-Speech ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   function speak(txt) {
@@ -77,6 +78,7 @@
 
   // ââ Inject text into CRM widget textarea âââââââââââââââââââââââââââââââââââ
   function sendToWidget(text) {
+    awaitTs = Date.now(); lastBotText = getLastBotText() || lastBotText;
     var chatEl = document.querySelector('chat-widget');
     var sr = chatEl && chatEl.shadowRoot;
     if(!sr) {
@@ -117,6 +119,16 @@
   }
 
   // ââ Watch for bot replies and read aloud âââââââââââââââââââââââââââââââââââ
+  function getLastBotText() {
+    var ce = document.querySelector('chat-widget');
+    if(!ce || !ce.shadowRoot) return '';
+    var bs = findDeep(ce.shadowRoot, '.bubble.incoming');
+    if(!bs.length) return '';
+    var sl = bs[bs.length-1].querySelector('slot');
+    if(!sl || !sl.assignedNodes) return '';
+    return sl.assignedNodes({flatten:true}).map(function(n){return n.textContent;}).join(' ').replace(/\s+/g,' ').trim();
+  }
+
   function watchBot() {
     var chatEl = document.querySelector('chat-widget');
     if(!chatEl || !chatEl.shadowRoot) {
@@ -125,13 +137,21 @@
     }
     function observe(root) {
       new MutationObserver(function(){
-        var msgs = findDeep(root, '[class*="bot-message"],[class*="agent-message"],[class*="received"],[class*="bot_message"],[class*="incoming"]');
+        var msgs = [];
         if(!msgs.length) return;
         var t = msgs[msgs.length-1].textContent.trim();
         if(t && t !== lastBotText && t.length > 5) { lastBotText=t; speak(t); }
       }).observe(root, {childList:true, subtree:true});
     }
     observe(chatEl.shadowRoot);
+    var pendT = '';
+    setInterval(function(){
+      if(!awaitTs || Date.now() - awaitTs > 90000) return;
+      var t = getLastBotText();
+      if(t && t !== lastBotText){
+        if(t === pendT){ lastBotText = t; pendT = ''; speak(t); } else { pendT = t; }
+      }
+    }, 800);
     // Re-watch if new shadow roots appear
     new MutationObserver(function(){
       var newShadows = Array.from(document.querySelectorAll('*')).filter(function(e){ return e.shadowRoot && !e.dataset.xWatched; });
